@@ -353,6 +353,11 @@ struct kvm_vcpu {
 	unsigned int halt_poll_ns;
 	bool valid_wakeup;
 
+	//Credit https://github.com/Ape-xCV/Nika-Read-Only
+	u64 last_exit_start;
+	bool intercept_cpuid;
+	bool infer_intercept;
+
 #ifdef CONFIG_HAS_IOMEM
 	int mmio_needed;
 	int mmio_read_completed;

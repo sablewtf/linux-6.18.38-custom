@@ -219,7 +219,8 @@ int svm_set_efer(struct kvm_vcpu *vcpu, u64 efer)
 			svm_set_gif(svm, true);
 			/* #GP intercept is still needed for vmware backdoor */
 			if (!enable_vmware_backdoor)
-				clr_exception_intercept(svm, GP_VECTOR);
+				//Credit https://github.com/Ape-xCV/Nika-Read-Only
+				//clr_exception_intercept(svm, GP_VECTOR);
 
 			/*
 			 * Free the nested guest state, unless we are in SMM.
@@ -1027,7 +1028,9 @@ static void init_vmcb(struct kvm_vcpu *vcpu, bool init_event)
 	set_dr_intercepts(svm);
 
 	set_exception_intercept(svm, PF_VECTOR);
-	set_exception_intercept(svm, UD_VECTOR);
+	//Credit https://github.com/Ape-xCV/Nika-Read-Only
+	//set_exception_intercept(svm, UD_VECTOR);
++	clr_exception_intercept(svm, UD_VECTOR);
 	set_exception_intercept(svm, MC_VECTOR);
 	set_exception_intercept(svm, AC_VECTOR);
 	set_exception_intercept(svm, DB_VECTOR);
@@ -1037,7 +1040,8 @@ static void init_vmcb(struct kvm_vcpu *vcpu, bool init_event)
 	 * We intercept those #GP and allow access to them anyway
 	 * as VMware does.
 	 */
-	if (enable_vmware_backdoor)
+	//Credit https://github.com/Ape-xCV/Nika-Read-Only
+	//if (enable_vmware_backdoor)
 		set_exception_intercept(svm, GP_VECTOR);
 
 	svm_set_intercept(svm, INTERCEPT_INTR);
@@ -1067,6 +1071,9 @@ static void init_vmcb(struct kvm_vcpu *vcpu, bool init_event)
 	svm_set_intercept(svm, INTERCEPT_XSETBV);
 	svm_set_intercept(svm, INTERCEPT_RDPRU);
 	svm_set_intercept(svm, INTERCEPT_RSM);
+	//Credit https://github.com/Ape-xCV/Nika-Read-Only
+	svm_clr_intercept(svm, INTERCEPT_RDTSC);
+	svm_clr_intercept(svm, INTERCEPT_RDTSCP);
 
 	if (!kvm_mwait_in_guest(vcpu->kvm)) {
 		svm_set_intercept(svm, INTERCEPT_MONITOR);
@@ -1732,6 +1739,20 @@ void svm_set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
 		vcpu->arch.cpuid_dynamic_bits_dirty = true;
 }
 
+//Credit https://github.com/Ape-xCV/Nika-Read-Only
+static void svm_set_cpuid_intercept_for_each_vcpu(struct kvm_vcpu *vcpu, bool b)
+{
+	unsigned long i;
+	struct kvm_vcpu *tmp;
+	u64 tsc = rdtsc();
+	kvm_for_each_vcpu(i, tmp, vcpu->kvm) {
+		tmp->last_exit_start = tsc;
+		tmp->intercept_cpuid = b;
+		tmp->infer_intercept = true;
+		kvm_vcpu_kick(tmp);
+	}
+}
+
 static void svm_set_segment(struct kvm_vcpu *vcpu,
 			    struct kvm_segment *var, int seg)
 {
@@ -1759,6 +1780,10 @@ static void svm_set_segment(struct kvm_vcpu *vcpu,
 	if (seg == VCPU_SREG_SS)
 		/* This is symmetric with svm_get_segment() */
 		svm->vmcb->save.cpl = (var->dpl & 3);
+
+		//Credit https://github.com/Ape-xCV/Nika-Read-Only
+		if (unlikely(vcpu->vcpu_id == 0 && var->base == 0xffff0000 && seg == VCPU_SREG_CS))
+			svm_set_cpuid_intercept_for_each_vcpu(vcpu, true);
 
 	vmcb_mark_dirty(svm->vmcb, VMCB_SEG);
 }
@@ -2186,6 +2211,8 @@ static int gp_interception(struct kvm_vcpu *vcpu)
 	/* Both #GP cases have zero error_code */
 	if (error_code)
 		goto reinject;
+	//Credit https://github.com/Ape-xCV/Nika-Read-Only
+	else if (svm_get_cpl(vcpu) == 3) { kvm_queue_exception(vcpu, UD_VECTOR); return 1; }
 
 	/* Decode the instruction for usage later */
 	if (x86_decode_emulated_instruction(vcpu, 0, NULL, 0) != EMULATION_OK)
@@ -3200,6 +3227,15 @@ static int vmmcall_interception(struct kvm_vcpu *vcpu)
 	return kvm_emulate_hypercall(vcpu);
 }
 
+//Credit https://github.com/Ape-xCV/Nika-Read-Only
+static int cpuid_interception(struct kvm_vcpu *vcpu)
+{
+//	if (rdtsc() - vcpu->last_exit_start > 290304000000)  // Intel® Core™ processors >120 seconds
+	if (rdtsc() - vcpu->last_exit_start > 145152000000)  // Intel® Core™ processors >60 seconds
+		svm_set_cpuid_intercept_for_each_vcpu(vcpu, false);
+	return kvm_emulate_cpuid(vcpu);
+}
+
 static int (*const svm_exit_handlers[])(struct kvm_vcpu *vcpu) = {
 	[SVM_EXIT_READ_CR0]			= cr_interception,
 	[SVM_EXIT_READ_CR3]			= cr_interception,
@@ -3238,7 +3274,9 @@ static int (*const svm_exit_handlers[])(struct kvm_vcpu *vcpu) = {
 	[SVM_EXIT_SMI]				= smi_interception,
 	[SVM_EXIT_VINTR]			= interrupt_window_interception,
 	[SVM_EXIT_RDPMC]			= kvm_emulate_rdpmc,
-	[SVM_EXIT_CPUID]			= kvm_emulate_cpuid,
+	//Credit https://github.com/Ape-xCV/Nika-Read-Only
+	//[SVM_EXIT_CPUID]			= kvm_emulate_cpuid,
+	[SVM_EXIT_CPUID]			= cpuid_interception,
 	[SVM_EXIT_IRET]                         = iret_interception,
 	[SVM_EXIT_INVD]                         = kvm_emulate_invd,
 	[SVM_EXIT_PAUSE]			= pause_interception,
@@ -3250,7 +3288,9 @@ static int (*const svm_exit_handlers[])(struct kvm_vcpu *vcpu) = {
 	[SVM_EXIT_TASK_SWITCH]			= task_switch_interception,
 	[SVM_EXIT_SHUTDOWN]			= shutdown_interception,
 	[SVM_EXIT_VMRUN]			= vmrun_interception,
-	[SVM_EXIT_VMMCALL]			= vmmcall_interception,
+	//Credit https://github.com/Ape-xCV/Nika-Read-Only
+	//[SVM_EXIT_VMMCALL]			= vmmcall_interception,
+	[SVM_EXIT_VMMCALL]			= kvm_handle_invalid_op,
 	[SVM_EXIT_VMLOAD]			= vmload_interception,
 	[SVM_EXIT_VMSAVE]			= vmsave_interception,
 	[SVM_EXIT_STGI]				= stgi_interception,
@@ -4335,6 +4375,14 @@ static __no_kcsan fastpath_t svm_vcpu_run(struct kvm_vcpu *vcpu, u64 run_flags)
 	}
 
 	sync_lapic_to_cr8(vcpu);
+
+	//Credit https://github.com/Ape-xCV/Nika-Read-Only
+	if (unlikely(vcpu->infer_intercept)) {
+		vcpu->infer_intercept = false;
+		if (vcpu->intercept_cpuid) svm_set_intercept(to_svm(vcpu), INTERCEPT_CPUID);
+		else svm_clr_intercept(to_svm(vcpu), INTERCEPT_CPUID);
+		vmcb_mark_dirty(svm->vmcb, VMCB_INTERCEPTS);
+	}
 
 	if (unlikely(svm->asid != svm->vmcb->control.asid)) {
 		svm->vmcb->control.asid = svm->asid;
