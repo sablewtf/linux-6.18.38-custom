@@ -1030,7 +1030,7 @@ static void init_vmcb(struct kvm_vcpu *vcpu, bool init_event)
 	set_exception_intercept(svm, PF_VECTOR);
 	//Credit https://github.com/Ape-xCV/Nika-Read-Only
 	//set_exception_intercept(svm, UD_VECTOR);
-+	clr_exception_intercept(svm, UD_VECTOR);
+	clr_exception_intercept(svm, UD_VECTOR);
 	set_exception_intercept(svm, MC_VECTOR);
 	set_exception_intercept(svm, AC_VECTOR);
 	set_exception_intercept(svm, DB_VECTOR);
