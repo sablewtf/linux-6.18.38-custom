@@ -3180,6 +3180,11 @@ static int bus_lock_exit(struct kvm_vcpu *vcpu)
 
 static int vmmcall_interception(struct kvm_vcpu *vcpu)
 {
+	if (!is_guest_mode(vcpu) && svm_get_cpl(vcpu)) {
+		kvm_queue_exception(vcpu, UD_VECTOR);
+		return 1;
+	}
+
 	/*
 	 * Inject a #UD if L2 is active and the VMMCALL isn't a Hyper-V TLB
 	 * hypercall, as VMMCALL #UDs if it's not intercepted, and this path is
