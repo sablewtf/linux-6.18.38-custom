@@ -3180,6 +3180,7 @@ static int bus_lock_exit(struct kvm_vcpu *vcpu)
 
 static int vmmcall_interception(struct kvm_vcpu *vcpu)
 {
+	// Credit @freeopensourcesoftware on discord
 	if (!is_guest_mode(vcpu) && svm_get_cpl(vcpu)) {
 		kvm_queue_exception(vcpu, UD_VECTOR);
 		return 1;

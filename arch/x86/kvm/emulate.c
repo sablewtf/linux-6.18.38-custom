@@ -3960,6 +3960,7 @@ static int check_perm_out(struct x86_emulate_ctxt *ctxt)
 
 static const struct opcode group7_rm0[] = {
 	N,
+	// Credit @freeopensourcesoftware on discord
 	I(SrcNone | PrivUD | EmulateOnUD,	em_hypercall),
 	N, N, N, N, N, N,
 };
